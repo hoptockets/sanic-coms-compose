@@ -44,7 +44,7 @@ if test -f "Revolt.toml"; then
         if [ "$SECRETS_FOUND" -eq "0" ]; then
             echo "Overwrite flag passed, but secrets.env not found. This script will refuse to execute an overwrite without secrets.env."
             echo "If you are absolutely sure you want to overwrite your secrets with new secrets, copy the secrets.env.example file without modifying it's contents using command 'cp secrets.env.example secrets.env'."
-            echo "If you do not copy your existing secrets into secrets.env you WILL lose access to ALL of your files store in your Stoat instance."
+            echo "If you do not copy your existing secrets into secrets.env you WILL lose access to ALL files stored on your .Comms instance."
             exit 1
         fi
         echo "Overwriting existing config."
@@ -57,10 +57,10 @@ if test -f "Revolt.toml"; then
     else
         echo "Existing config found, in caution, this script will refuse to execute if you have existing config."
         if [ "$SECRETS_FOUND" -eq "0" ]; then
-            echo "Please configure secrets.env with your existing secrets to prevent losing access to your saved files in your Stoat instance. You can see instructions on how to configure it by reading the file secrets.env.example. You can do this by running the command 'cat secrets.env.example'."
-            echo "Overwriting your existing config will result in you losing access to all current files stored on your Stoat instance unless you copy your old secrets into secrets.env."
+            echo "Please configure secrets.env with your existing secrets to prevent losing access to your saved files in your .Comms instance. You can see instructions on how to configure it by reading the file secrets.env.example. You can do this by running the command 'cat secrets.env.example'."
+            echo "Overwriting your existing config will result in you losing access to all current files stored on your .Comms instance unless you copy your old secrets into secrets.env."
         else
-            echo "secrets.env found, please ensure it matches what is currently in your Revolt.toml."
+            echo "secrets.env found, please ensure it matches what is currently in your configuration file (Revolt.toml)."
         fi
         echo "This script will back up your old config if you choose to overwrite."
         echo "To overwrite the existing config, run the script again with the --overwrite flag"
@@ -73,24 +73,26 @@ if [ "$SECRETS_FOUND" -eq "0" ]; then
     loadSecrets
 fi
 
-echo "Configuring Stoat with hostname $DOMAIN"
+echo "Configuring .Comms with hostname $DOMAIN"
 
-STOAT_HOSTNAME="https://$DOMAIN"
+SANIC_HOSTNAME="https://$DOMAIN"
 
-read -rp "Would you like to place Stoat behind another reverse proxy? [y/N]: "
+read -rp "Would you like to place .Comms behind another reverse proxy? [y/N]: "
 if [ "$REPLY" = "y" ] || [ "$REPLY" = "Y" ]; then
     echo "Yes received. Configuring for reverse proxy."
-    STOAT_HOSTNAME=':80'
+    SANIC_HOSTNAME=':80'
     echo "Writing compose.override.yml..."
     echo "services:" > compose.override.yml
     echo "  caddy:" >> compose.override.yml
     echo "    ports: !override" >> compose.override.yml
     echo "     - \"8880:80\"" >> compose.override.yml
     echo "caddy is configured to host on :8880. If you need a different port, modify the compose.override.yml."
-    echo "STOAT_DOMAIN=" > .env
+    echo "SANIC_DOMAIN=" > .env
+    echo "STOAT_DOMAIN=" >> .env
 else
     echo "No received. Configuring with built in caddy as primary reverse proxy."
-    echo "STOAT_DOMAIN=$DOMAIN" > .env
+    echo "SANIC_DOMAIN=$DOMAIN" > .env
+    echo "STOAT_DOMAIN=$DOMAIN" >> .env
 fi
 
 read -rp "Would you like to enable camera and screen sharing? [Y/n]: "
@@ -159,12 +161,15 @@ else
 fi
 
 # set hostname for Caddy and vite variables
-echo "HOSTNAME=$STOAT_HOSTNAME" > .env.web
+echo "HOSTNAME=$SANIC_HOSTNAME" > .env.web
+echo "SANIC_PUBLIC_URL=https://$DOMAIN/api" >> .env.web
 echo "REVOLT_PUBLIC_URL=https://$DOMAIN/api" >> .env.web
 echo "VITE_API_URL=https://$DOMAIN/api" >> .env.web
 echo "VITE_WS_URL=wss://$DOMAIN/ws" >> .env.web
 echo "VITE_MEDIA_URL=https://$DOMAIN/autumn" >> .env.web
 echo "VITE_PROXY_URL=https://$DOMAIN/january" >> .env.web
+echo "VITE_GIFBOX_URL=https://$DOMAIN/gifbox" >> .env.web
+echo "VITE_GIPHY_API_KEY=" >> .env.web
 echo "VITE_CFG_ENABLE_VIDEO=$VIDEO_ENABLED" >> .env.web
 
 # hostnames
@@ -192,9 +197,25 @@ echo "" >> Revolt.toml
 echo "[files]" >> Revolt.toml
 echo "encryption_key = \"$FILES_ENCRYPTION_KEY\"" >> Revolt.toml
 
+# LiveKit RTC: set LIVEKIT_NODE_IP in secrets.env to your VM/host IP that browsers
+# can reach for UDP/WebRTC (e.g. Incus instance 10.x). Cloudflare Tunnel alone does
+# not forward LiveKit UDP; you still need this IP reachable or a TURN server.
+LIVEKIT_USE_EXTERNAL="false"
+LIVEKIT_RTC_IP="127.0.0.1"
+if [ -n "${LIVEKIT_NODE_IP:-}" ]; then
+    LIVEKIT_USE_EXTERNAL="true"
+    LIVEKIT_RTC_IP="$LIVEKIT_NODE_IP"
+    echo "Using LIVEKIT_NODE_IP=$LIVEKIT_RTC_IP for LiveKit rtc.node_ip (use_external_ip: true)."
+elif [ "$DOMAIN" != "localhost" ] && [ "$DOMAIN" != "127.0.0.1" ]; then
+    echo "Note: LIVEKIT_NODE_IP is not set in secrets.env. Voice/video may fail until you set it"
+    echo "      to your server's reachable IP and re-run: ./generate_config.sh --overwrite $DOMAIN"
+fi
+
 # livekit yml
 echo "rtc:" > livekit.yml
-echo "  use_external_ip: true" >> livekit.yml
+echo "  # use_external_ip + node_ip: set LIVEKIT_NODE_IP in secrets.env for production" >> livekit.yml
+echo "  use_external_ip: $LIVEKIT_USE_EXTERNAL" >> livekit.yml
+echo "  node_ip: $LIVEKIT_RTC_IP" >> livekit.yml
 echo "  port_range_start: 50000" >> livekit.yml
 echo "  port_range_end: 50100" >> livekit.yml
 echo "  tcp_port: 7881" >> livekit.yml
@@ -237,5 +258,5 @@ if [[ -n "$VIDEO_ENABLED" ]]; then
 fi
 
 if [[ $IS_OVERWRITING -eq 1 ]]; then
-    echo "Overwrote existing config. If any custom configuration was present in old Revolt.toml, you may now copy it over from Revolt.toml.old."
+    echo "Overwrote existing config. If custom configuration was present in old Revolt.toml, copy it over from Revolt.toml.old."
 fi

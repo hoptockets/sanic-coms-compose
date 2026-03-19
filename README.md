@@ -1,6 +1,6 @@
 <div align="center">
 <h1>
-  Stoat Self-Hosted
+  .Comms Self-Hosted
   
   [![Stars](https://img.shields.io/github/stars/stoatchat/self-hosted?style=flat-square&logoColor=white)](https://github.com/stoatchat/self-hosted/stargazers)
   [![Forks](https://img.shields.io/github/forks/stoatchat/self-hosted?style=flat-square&logoColor=white)](https://github.com/stoatchat/self-hosted/network/members)
@@ -9,11 +9,11 @@
   [![Contributors](https://img.shields.io/github/contributors/stoatchat/self-hosted?style=flat-square&logoColor=white)](https://github.com/stoatchat/self-hosted/graphs/contributors)
   [![License](https://img.shields.io/github/license/stoatchat/self-hosted?style=flat-square&logoColor=white)](https://github.com/stoatchat/self-hosted/blob/main/LICENSE)
 </h1>
-Self-hosting Stoat using Docker
+Self-hosting .Comms using Docker
 </div>
 <br/>
 
-This repository contains configurations and instructions that can be used for deploying a full instance of Stoat, including the back-end, web front-end, file server, and metadata and image proxy.
+This repository contains configurations and instructions for deploying a full `.Comms` instance, including the backend, web frontend, file server, and metadata/image proxy.
 
 > [!WARNING]
 > If you are updating an instance from before February 28, 2026, please consult the [notices section](#notices) at the bottom.
@@ -22,10 +22,11 @@ This repository contains configurations and instructions that can be used for de
 > A list of security advisories is [provided at the bottom](#security-advisories).
 
 > [!NOTE]
-> Please consult _[What can I do with Stoat and how do I self-host?](https://developers.stoat.chat/faq)_ on our developer site for information about licensing and brand use.
+> Production deployment for **`https://comm.sanic.one`** (Incus + Cloudflare Tunnel, LiveKit IP, firewall) is documented in [DEPLOYMENT.md](./DEPLOYMENT.md). General hosting/support: [sanic.one](https://sanic.one/).
 
 ## Table of Contents
 
+- [Production (comm.sanic.one)](./DEPLOYMENT.md)
 - [Deployment](#deployment)
   - [Secure your server](#secure-your-server)
   - [Configure your domain](#configure-your-domain)
@@ -147,11 +148,11 @@ apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docke
 
 ## Configuration
 
-Now, we can pull in the configuration for Stoat:
+Now, pull in the compose configuration:
 
 ```bash
-git clone https://github.com/stoatchat/self-hosted stoat
-cd stoat
+git clone https://github.com/stoatchat/self-hosted dotcomms-compose
+cd dotcomms-compose
 ```
 
 Generate a configuration file by running:
@@ -161,7 +162,7 @@ chmod +x ./generate_config.sh
 ./generate_config.sh your.domain
 ```
 
-The generate_config.sh script will create the neccessary secrets required to create a Stoat instance, and the secrets will be inserted into a file named `secrets.env`. You should back up this file, as losing it may result in you losing access to all files on your Stoat instance.
+The `generate_config.sh` script creates the secrets required for a `.Comms` instance and writes them to `secrets.env`. Back up this file, because losing it may result in losing access to uploaded files.
 
 You can find [more options here](https://github.com/stoatchat/stoatchat/blob/main/crates/core/config/Revolt.toml), some noteworthy configuration options:
 
@@ -176,7 +177,7 @@ If you'd like to edit the configuration, just run:
 micro Revolt.toml
 ```
 
-Finally, we can start up Stoat. First, run it in the foreground with:
+Finally, start the stack. First, run it in the foreground with:
 
 ```bash
 docker compose up
@@ -186,6 +187,32 @@ If it runs without any critical errors, you can stop it with <kbd>Ctrl</kbd> + <
 
 ```bash
 docker compose up -d
+```
+
+## Local Test Deploy (Recommended)
+
+Use this quick flow to preview the full `.Comms` stack locally before pushing to GitHub or deploying to Incus:
+
+```bash
+# from this repository
+chmod +x ./generate_config.sh
+./generate_config.sh localhost
+docker compose up -d
+```
+
+After startup, verify routes:
+
+- `http://localhost/` -> frontend (`web`)
+- `http://localhost/api` -> API (`api`)
+- `ws://localhost/ws` -> events (`events`)
+- `http://localhost/autumn` -> file service (`autumn`)
+- `http://localhost/january` -> metadata/proxy (`january`)
+
+Useful checks:
+
+```bash
+docker compose ps
+docker compose logs caddy api web --tail 120
 ```
 
 ## Updating
@@ -223,18 +250,18 @@ docker compose up -d
 ### Creating an Account
 
 By default, email verification is disabled.
-However, when you sign up for an account on your Stoat instance, you are still required to submit an email address and will see a prompt to "Check your mail!" for a verification email. You can simply return to the login page and log in using the email address and password you just set.
+However, when you sign up for an account on your `.Comms` instance, you are still required to submit an email address and may see a prompt to check email. If verification is disabled, return to login and continue.
 
 ### Placing Behind Another Reverse-Proxy or Another Port
 
-During configuration using `generate_config.sh` you will be asked if you'd like to place Stoat behind another reverse proxy. Enter `y` to configure for reverse proxy. This will expose your caddy on port 8880, and you can reverse proxy to <http://localhost:8880>
+During configuration using `generate_config.sh` you will be asked if you'd like to place `.Comms` behind another reverse proxy. Enter `y` to configure for reverse proxy. This exposes Caddy on port `8880`, and you can reverse proxy to <http://localhost:8880>.
 
 > [!NOTE]
-> If you are using nginx as your reverse proxy, you will need to add the upgrade header configuration to allow websockets on /ws and /livekit, which are required for Stoat.
+> If you are using nginx as your reverse proxy, add the upgrade header configuration to allow websockets on `/ws` and `/livekit`, which are required for `.Comms`.
 > Example:
 > ```
 > server {
->     server_name stoat.example.com;
+>     server_name comms.example.com;
 >
 >     location / {
 >         allow all;

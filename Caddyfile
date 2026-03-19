@@ -1,3 +1,7 @@
+{
+	# .Comms default Caddy entrypoint
+}
+
 {$HOSTNAME} {
 	route /api* {
 		uri strip_prefix /api

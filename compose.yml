@@ -1,4 +1,4 @@
-name: stoat
+name: dotcomms
 
 services:
   # MongoDB: Database
@@ -14,12 +14,12 @@ services:
       retries: 5
       start_period: 10s
 
-  # Redis: Event message broker & KV store
+  # Redis-compatible store for events and cache
   redis:
     image: docker.io/eqalpha/keydb
     restart: always
 
-  # RabbitMQ: Internal message broker
+  # RabbitMQ: Internal queue and broker
   rabbit:
     image: docker.io/rabbitmq:4
     restart: always
@@ -58,7 +58,7 @@ services:
           - emojis.minio
     restart: always
 
-  # Caddy: Web server
+  # Caddy: edge web server / reverse proxy
   caddy:
     image: docker.io/caddy
     restart: always
@@ -73,9 +73,9 @@ services:
     networks:
       default:
         aliases:
-         - "${STOAT_DOMAIN:-caddy}"
+         - "${SANIC_DOMAIN:-${STOAT_DOMAIN:-caddy}}"
 
-  # API server
+  # API service
   api:
     image: ghcr.io/stoatchat/api:v0.11.1
     depends_on:
@@ -91,7 +91,7 @@ services:
         target: /Revolt.toml
     restart: always
 
-  # Events service
+  # Events service (WebSocket)
   events:
     image: ghcr.io/stoatchat/events:v0.11.1
     depends_on:
@@ -119,7 +119,7 @@ services:
         target: /Revolt.toml
     restart: always
 
-  # Metadata and image proxy
+  # Metadata and image proxy service
   january:
     image: ghcr.io/stoatchat/proxy:v0.11.1
     volumes:
@@ -151,7 +151,7 @@ services:
         target: /Revolt.toml
     restart: always
 
-  # Push notification daemon
+  # Push notification worker
   pushd:
     image: ghcr.io/stoatchat/pushd:v0.11.1
     depends_on:
@@ -167,7 +167,7 @@ services:
         target: /Revolt.toml
     restart: always
 
-   # Voice ingress daemon
+  # Voice ingress worker
   voice-ingress:
     image: ghcr.io/stoatchat/voice-ingress:v0.11.1
     restart: always
@@ -211,8 +211,10 @@ services:
       exit 0;
       "
 
-  # Web App
+  # Web frontend
   web:
-    image: ghcr.io/stoatchat/for-web:103d2bf
+    build:
+      context: ../sanic-comms
+      dockerfile: Dockerfile
     restart: always
     env_file: .env.web
