@@ -1,0 +1,37 @@
+FROM rust:1.92.0-slim-bookworm AS builder
+
+USER 0:0
+WORKDIR /home/rust/src
+
+RUN apt-get update && \
+    apt-get install -y \
+      make \
+      pkg-config \
+      libssl-dev \
+      ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy backend source into container
+COPY sanic-comms-backend ./sanic-comms-backend
+
+WORKDIR /home/rust/src/sanic-comms-backend
+
+# Build the events binary from source
+RUN cargo build --release -p revolt-bonfire
+
+
+FROM debian:12-slim AS runtime
+
+RUN apt-get update && \
+    apt-get install -y ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN useradd -m nonroot
+USER nonroot
+
+COPY --from=builder /home/rust/src/sanic-comms-backend/target/release/revolt-bonfire /usr/local/bin/revolt-bonfire
+
+EXPOSE 14703
+
+CMD ["/usr/local/bin/revolt-bonfire"]
+
